@@ -17,10 +17,7 @@ import (
 
 var (
 	oauthConfig = &oauth2.Config{
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("REDIRECT_URL"),
-		Scopes:       []string{"https://www.googleapis.com/auth/calendar"},
+		Scopes: []string{"https://www.googleapis.com/auth/calendar"},
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  "https://accounts.google.com/o/oauth2/auth",
 			TokenURL: "https://oauth2.googleapis.com/token",
@@ -28,6 +25,7 @@ var (
 	}
 )
 
+// loading .env vars that contains the Oauth client credentials
 func init() {
 	err := godotenv.Load()
 	if err != nil {
@@ -40,6 +38,7 @@ func init() {
 }
 
 func main() {
+	// prompt the user with the redirection link
 	authURL := oauthConfig.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 	fmt.Println("Please open the following URL in your browser to authorize the application:")
 	fmt.Println(authURL)
@@ -50,6 +49,7 @@ func main() {
 }
 
 func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
+	// get the user token
 	code := r.URL.Query().Get("code")
 	token, err := oauthConfig.Exchange(context.Background(), code)
 	if err != nil {
@@ -57,6 +57,7 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// get prayer timings from the api endpoint
 	prayerTimes := GetPrayersTimingsApi()
 	for _, timing := range prayerTimes {
 
@@ -82,17 +83,20 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fmt.Fprintf(w, "Event created successfully!")
+	// print the success message and exit
 	fmt.Println("Events Created")
 	os.Exit(1)
 
 }
 
 func GetPrayersTimingsApi() []Timings {
+	// getting the required data for the api (year, month, city, country)
 	var year = fmt.Sprint(time.Now().Year())
 	var month = fmt.Sprint(int(time.Now().Month()))
 	var city string = "cairo"
 	var country string = "egypt"
+
+	// taking args from the user for their location for specific timings
 	if len(os.Args) >= 3 {
 		city = os.Args[1]
 		country = os.Args[2]
@@ -113,19 +117,21 @@ func GetPrayersTimingsApi() []Timings {
 		panic(err)
 	}
 
+	//converting the json response from the api to go structs to deal with
 	var PrayingTimes PrayerTimes
 	err = json.Unmarshal(body, &PrayingTimes)
 	if err != nil {
 		panic(err)
 	}
 
+	// get timings only from the json response
 	timings := PrayingTimes.GetTimings()
 
-	//prayersTime := PrayingTimes.Data
 	return timings
 
 }
 
+// createEvent takes the user token and the event data to make the actual event in the calendar
 func createEvent(token *oauth2.Token, summary string, startTime, endTime string) error {
 	client := oauthConfig.Client(context.Background(), token)
 	srv, err := calendar.NewService(context.Background(), option.WithHTTPClient(client))
@@ -135,7 +141,7 @@ func createEvent(token *oauth2.Token, summary string, startTime, endTime string)
 
 	event := &calendar.Event{
 		Summary:     summary,
-		Description: "prayer timing",
+		Description: "Prayer Timing",
 		Start: &calendar.EventDateTime{
 			DateTime: startTime,
 		},
@@ -151,6 +157,7 @@ func createEvent(token *oauth2.Token, summary string, startTime, endTime string)
 	return nil
 }
 
+// parsing the json data from the response to get the required form for the calendar
 func (pt *PrayerTimes) GetTimings() []Timings {
 	timings := make([]Timings, len(pt.Data))
 	for i, data := range pt.Data {
