@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
@@ -39,9 +40,7 @@ func init() {
 }
 
 func main() {
-
 	authURL := oauthConfig.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-
 	fmt.Println("Please open the following URL in your browser to authorize the application:")
 	fmt.Println(authURL)
 
@@ -59,25 +58,27 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prayerTimes := GetPrayersTimingsApi()
+	for _, timing := range prayerTimes {
 
-	events := []struct {
-		Summary   string
-		StartTime string
-		EndTime   string
-	}{
-		{"فجر", prayerTimes.Fajr, prayerTimes.Fajr},
-		{"ظهر", prayerTimes.Dhuhr, prayerTimes.Dhuhr},
-		{"عصر", prayerTimes.Asr, prayerTimes.Asr},
-		{"مغرب", prayerTimes.Maghrib, prayerTimes.Maghrib},
-		{"عشاء", prayerTimes.Isha, prayerTimes.Isha},
-	}
+		events := []struct {
+			Summary   string
+			StartTime string
+			EndTime   string
+		}{
+			{"فجر", timing.Fajr, timing.Fajr},
+			{"ظهر", timing.Dhuhr, timing.Dhuhr},
+			{"عصر", timing.Asr, timing.Asr},
+			{"مغرب", timing.Maghrib, timing.Maghrib},
+			{"عشاء", timing.Isha, timing.Isha},
+		}
 
-	// Create events for each event detail
-	for _, event := range events {
-		err = createEvent(token, event.Summary, event.StartTime, event.EndTime)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create event: %v", err), http.StatusInternalServerError)
-			return
+		// Create events for each event detail
+		for _, event := range events {
+			err = createEvent(token, event.Summary, event.StartTime, event.EndTime)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to create event: %v", err), http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 
@@ -87,7 +88,9 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func GetPrayersTimingsApi() Timings {
+func GetPrayersTimingsApi() []Timings {
+	var year = fmt.Sprint(time.Now().Year())
+	var month = fmt.Sprint(int(time.Now().Month()))
 	var city string = "cairo"
 	var country string = "egypt"
 	if len(os.Args) >= 3 {
@@ -95,7 +98,7 @@ func GetPrayersTimingsApi() Timings {
 		country = os.Args[2]
 	}
 
-	res, err := http.Get("http://api.aladhan.com/v1/timingsByCity?city=" + city + "&country=" + country + "&method=5&iso8601=true")
+	res, err := http.Get("http://api.aladhan.com/v1/calendarByCity/" + year + "/" + month + "?city=" + city + "&country=" + country + "&method=5&iso8601=true")
 	if err != nil {
 		panic(err)
 	}
@@ -116,8 +119,10 @@ func GetPrayersTimingsApi() Timings {
 		panic(err)
 	}
 
-	prayersTime := PrayingTimes.Data.Timings
-	return prayersTime
+	timings := PrayingTimes.GetTimings()
+
+	//prayersTime := PrayingTimes.Data
+	return timings
 
 }
 
@@ -144,4 +149,12 @@ func createEvent(token *oauth2.Token, summary string, startTime, endTime string)
 		return err
 	}
 	return nil
+}
+
+func (pt *PrayerTimes) GetTimings() []Timings {
+	timings := make([]Timings, len(pt.Data))
+	for i, data := range pt.Data {
+		timings[i] = data.Timings
+	}
+	return timings
 }
