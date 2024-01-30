@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"reflect"
-	"time"
 
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
@@ -32,9 +30,14 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	oauthConfig.ClientID = os.Getenv("GOOGLE_CLIENT_ID")
+	oauthConfig.ClientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
+	oauthConfig.RedirectURL = os.Getenv("REDIRECT_URL")
 }
 
 func main() {
+
 	authURL := oauthConfig.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 
 	fmt.Println("Please open the following URL in your browser to authorize the application:")
@@ -53,16 +56,18 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//accessToken := fmt.Sprint("Access token:", token.AccessToken)
-	//refreshToken := fmt.Sprint("Refresh token:", token.RefreshToken)
+	prayerTimes := GetPrayersTimingsApi()
 
 	events := []struct {
 		Summary   string
-		StartTime time.Time
-		EndTime   time.Time
+		StartTime string
+		EndTime   string
 	}{
-		{"Event 1", time.Now().Add(24 * time.Hour), time.Now().Add(24*time.Hour + time.Hour)},
-		{"Event 2", time.Now().Add(48 * time.Hour), time.Now().Add(48*time.Hour + time.Hour)},
+		{"Fajr", prayerTimes.Fajr, prayerTimes.Fajr},
+		{"Duhr", prayerTimes.Dhuhr, prayerTimes.Dhuhr},
+		{"Asr", prayerTimes.Asr, prayerTimes.Asr},
+		{"Maghrib", prayerTimes.Maghrib, prayerTimes.Maghrib},
+		{"Ishaa", prayerTimes.Isha, prayerTimes.Isha},
 	}
 
 	// Create events for each event detail
@@ -76,11 +81,17 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "Event created successfully!")
 
-	fmt.Fprintf(w, "Authorization successful! You can close this window.")
 }
 
-func GetPrayersTimingsApi() {
-	res, err := http.Get("http://api.aladhan.com/v1/calendarByAddress/2024/1?address=Cairo&method=5")
+func GetPrayersTimingsApi() Timings {
+	var city string
+	var country string
+	fmt.Println("enter your city")
+	fmt.Scanln(&city)
+	fmt.Println("enter your country")
+	fmt.Scanln(&country)
+
+	res, err := http.Get("http://api.aladhan.com/v1/timingsByCity?city=" + city + "&country=" + country + "&method=5&iso8601=true")
 	if err != nil {
 		panic(err)
 	}
@@ -101,25 +112,7 @@ func GetPrayersTimingsApi() {
 		panic(err)
 	}
 
-	prayers, date := PrayingTimes.Data[1].Timings, PrayingTimes.Data[1].Date.Gregorian.Date
+	prayersTime := PrayingTimes.Data.Timings
+	return prayersTime
 
-	//Get the reflect.Value of the struct
-	val := reflect.ValueOf(prayers)
-
-	//Loop over each field
-	for i := 0; i < val.NumField(); i++ {
-		// Get the field name
-		fieldName := val.Type().Field(i).Name
-
-		// Get the field value
-		fieldValue := val.Field(i).Interface()
-
-		// Print the field name and value
-		fmt.Printf("%s: %v\n", fieldName, fieldValue)
-
-	}
-
-	fmt.Printf("date: %s\n",
-		date,
-	)
 }

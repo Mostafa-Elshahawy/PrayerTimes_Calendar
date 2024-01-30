@@ -13,7 +13,7 @@ type Gregorian struct {
 }
 
 type PrayerTimes struct {
-	Data []struct {
+	Data struct {
 		Timings Timings `json:"timings"`
 		Date    Date    `json:"date"`
 	} `json:"data"`
