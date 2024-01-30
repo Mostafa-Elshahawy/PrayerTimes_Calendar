@@ -10,6 +10,8 @@ import (
 
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
+	"google.golang.org/api/calendar/v3"
+	"google.golang.org/api/option"
 )
 
 var (
@@ -63,11 +65,11 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		StartTime string
 		EndTime   string
 	}{
-		{"Fajr", prayerTimes.Fajr, prayerTimes.Fajr},
-		{"Duhr", prayerTimes.Dhuhr, prayerTimes.Dhuhr},
-		{"Asr", prayerTimes.Asr, prayerTimes.Asr},
-		{"Maghrib", prayerTimes.Maghrib, prayerTimes.Maghrib},
-		{"Ishaa", prayerTimes.Isha, prayerTimes.Isha},
+		{"فجر", prayerTimes.Fajr, prayerTimes.Fajr},
+		{"ظهر", prayerTimes.Dhuhr, prayerTimes.Dhuhr},
+		{"عصر", prayerTimes.Asr, prayerTimes.Asr},
+		{"مغرب", prayerTimes.Maghrib, prayerTimes.Maghrib},
+		{"عشاء", prayerTimes.Isha, prayerTimes.Isha},
 	}
 
 	// Create events for each event detail
@@ -80,16 +82,18 @@ func handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "Event created successfully!")
+	fmt.Println("Events Created")
+	os.Exit(1)
 
 }
 
 func GetPrayersTimingsApi() Timings {
-	var city string
-	var country string
-	fmt.Println("enter your city")
-	fmt.Scanln(&city)
-	fmt.Println("enter your country")
-	fmt.Scanln(&country)
+	var city string = "cairo"
+	var country string = "egypt"
+	if len(os.Args) >= 3 {
+		city = os.Args[1]
+		country = os.Args[2]
+	}
 
 	res, err := http.Get("http://api.aladhan.com/v1/timingsByCity?city=" + city + "&country=" + country + "&method=5&iso8601=true")
 	if err != nil {
@@ -115,4 +119,29 @@ func GetPrayersTimingsApi() Timings {
 	prayersTime := PrayingTimes.Data.Timings
 	return prayersTime
 
+}
+
+func createEvent(token *oauth2.Token, summary string, startTime, endTime string) error {
+	client := oauthConfig.Client(context.Background(), token)
+	srv, err := calendar.NewService(context.Background(), option.WithHTTPClient(client))
+	if err != nil {
+		return err
+	}
+
+	event := &calendar.Event{
+		Summary:     summary,
+		Description: "prayer timing",
+		Start: &calendar.EventDateTime{
+			DateTime: startTime,
+		},
+		End: &calendar.EventDateTime{
+			DateTime: endTime,
+		},
+	}
+
+	_, err = srv.Events.Insert("primary", event).Do()
+	if err != nil {
+		return err
+	}
+	return nil
 }
